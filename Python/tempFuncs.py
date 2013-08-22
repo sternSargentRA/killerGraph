@@ -1,7 +1,7 @@
 import numpy as np
 from numpy import dot, eye
-from haha import olrp
-from scipy.linalg import inv, solve
+from killergraphfuncs import olrp
+from scipy.linalg import inv
 
 
 def olrprobust(beta, A, B, C, Q, R, sig):
