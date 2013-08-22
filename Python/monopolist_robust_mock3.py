@@ -49,7 +49,7 @@ sig = -10. # This is the risk sensitives parameter and should be neg when there
 # Define necessary Matrices
 #-----------------------------------------------------------------------------#
 Q = np.array([[0, .5*(A_0 - c), 0], [.5*(A_0 - c), -A_1, .5], [0., .5, 0.]])
-R = -.5 * math.e
+R = -.5 * e
 
 # Flip signs to make both matrices positive definite since we solve the
 # minimization problem
