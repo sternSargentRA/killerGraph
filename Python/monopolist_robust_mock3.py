@@ -38,7 +38,7 @@ import matplotlib.pyplot as plt
 # Define run control parameters
 #-----------------------------------------------------------------------------#
 N = 100  # number of values in grid for sigma
-skip = 1  # how many iterations to skip before printing update
+skip = 10  # how many iterations to skip before printing update
 
 msg = "Iteration {num} of {N}. Total time elapsed {time}"
 
@@ -121,7 +121,7 @@ Xrobust = np.zeros((N, 2))
 sigspace = np.linspace(1e-7, 100, N)
 
 for i in xrange(N):
-    sigc = sigspace[i]
+    sigc = - sigspace[i]
 
     Kwo, Pwo, pwo, BigOo, littleoo = Kworst(beta, sigc, fo, A, B, C, Q, R)
     Kwr, Pwr, pwr, BigOr, littleor = Kworst(beta, sigc, F9, A, B, C, Q, R)
@@ -131,10 +131,10 @@ for i in xrange(N):
     x0 = np.array([[1.], [0.], [0.]])
 
     Vo = - x0.T.dot(Pwo.dot(x0)) - pwo
-    Vr = - x0.T.dot(Pwo.dot(x0)) - pwr
+    Vr = - x0.T.dot(Pwr.dot(x0)) - pwr
 
-    ento = - x0.T.dot(BigOo.dot(x0)) + littleoo
-    entr = - x0.T.dot(BigOr.dot(x0)) + littleor
+    ento = x0.T.dot(BigOo.dot(x0)) + littleoo
+    entr = x0.T.dot(BigOr.dot(x0)) + littleor
 
     Xopt[i, 0] = Vo
     Xopt[i, 1] = ento
@@ -146,13 +146,11 @@ for i in xrange(N):
         e_time = time() - start_time
         print(msg.format(num=i, N=N, time=e_time))
 
-
-
 plt.figure(1)
 plt.plot(Xopt[:, 1], Xopt[:, 0], 'r')
 plt.plot(Xrobust[:, 1], Xrobust[:, 0], 'b--')
 
-
+print("\n" + "#" * 70 + "\nMoving on to optimistic case\n" + "#" * 70 + "\n")
 # Now do the "optimistic" shock calculations
 Yopt = np.zeros((N, 2))
 Yrobust = np.zeros((N, 2))
@@ -167,17 +165,21 @@ for i in xrange(N):
 
     x0 = np.array([[1.], [0.], [0.]])
 
-    Vo = - x0.T.dot(Pwo.dot(x0))- pwo
-    Vr = - x0.T.dot(Pwo.dot(x0))- pwr
+    Vo = - x0.T.dot(Pwo.dot(x0)) - pwo
+    Vr = - x0.T.dot(Pwr.dot(x0)) - pwr
 
-    ento = - x0.T.dot(BigOo.dot(x0)) + littleoo
-    entr = - x0.T.dot(BigOr.dot(x0)) + littleor
+    ento = x0.T.dot(BigOo.dot(x0)) + littleoo
+    entr = x0.T.dot(BigOr.dot(x0)) + littleor
 
     Yopt[i, 0] = Vo
     Yopt[i, 1] = ento
 
     Yrobust[i, 0] = Vr
     Yrobust[i, 1] = entr
+
+    if i % skip == 0:
+        e_time = time() - start_time
+        print(msg.format(num=i, N=N, time=e_time))
 
 plt.plot(Yopt[:, 1], Yopt[:, 0], 'r')
 plt.plot(Yrobust[:, 1], Yrobust[:, 0], 'b--')
