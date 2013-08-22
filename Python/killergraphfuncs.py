@@ -115,26 +115,25 @@ def doubleo(A, C, Q, R, tol=1e-15):
     By using DUALITY, control problems can also be solved.
     """
     a0 = A.T
-    b0 = C.T.dot(solve(R, C))
+    b0 = np.dot(C.T, solve(R, C))
     g0 = Q
-    dd = 1
+    dd = 1.
     ss = max(A.shape)
     v = np.eye(ss)
 
     while dd > tol:
-        a1 = a0.dot(solve(v + np.dot(b0, g0), a0))
-        b1 = b0 + a0.dot(solve(v + np.dot(b0, g0), b0.dot(a0.T)))
-        g1 = g0 + np.dot(a0.T.dot(g0), solve(v + b0.dot(g0), a0))
-        # k1 and k0 are defined differently than they originally were in
-        # this version of the code.  Need to get them matched up.
-        k1 = np.dot(A.dot(g1), solve(C.T, np.dot(C, g1).dot(C.T) + R))
-        k0 = np.dot(A.dot(g0), solve(C.T, np.dot(C, g0).dot(C.T) + R))
+        a1 = np.dot(a0, solve(v + np.dot(b0, g0), a0))
+        b1 = b0 + np.dot(a0, solve(v + np.dot(b0, g0), np.dot(b0, a0.T)))
+        g1 = g0 + np.dot(np.dot(a0.T, g0), solve(v + np.dot(b0, g0), a0))
+        k1 = np.dot(np.dot(A, g1), C.T / (np.dot(C, g1).dot(C.T) + R))
+        k0 = np.dot(A.dot(g0), C.T / (np.dot(C, g0).dot(C.T) + R))
+        dd = np.max(np.abs(k1 - k0))
         a0 = a1
         b0 = b1
         g0 = g1
-        dd = np.max(np.abs(k1 - k0))
 
     return k1, g1
+
 
 def doublex9(A, B, D, Q, R, sig):
     '''
@@ -221,8 +220,6 @@ def doublex9(A, B, D, Q, R, sig):
         np.dot(D.T, P.dot(A - B.dot(F)))))
 
     return F, K, P, Pt
-
-
 
 
 def olrp(beta, A, B, Q, R, W=None, tol=1e-6, max_iter=1000):
@@ -332,6 +329,7 @@ def olrp(beta, A, B, Q, R, W=None, tol=1e-6, max_iter=1000):
 
     return f, p
 
+
 def olrprobust(beta, A, B, C, Q, R, sig):
     """
     Solves the robust control problem
@@ -419,6 +417,7 @@ def olrprobust(beta, A, B, C, Q, R, sig):
                              dot(inv(eye(cC) - theta**(-1)*dot(cTp, C)), cTp))
 
     return F, K, P, Pt
+
 
 def Kworst(beta, sig, F, A, B, C, Q, R):
     '''
