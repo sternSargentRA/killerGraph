@@ -40,7 +40,7 @@ sigma_d = .05
 beta = .95
 c = 2.
 e = 50.
-sig = -50. # This is the risk sensitives parameter and should be neg when there
+sig = -10. # This is the risk sensitives parameter and should be neg when there
            # is fear of model misspecification
 #-----------------------------------------------------------------------------#
 
