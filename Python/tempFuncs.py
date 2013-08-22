@@ -73,6 +73,7 @@ def olrprobust(beta, A, B, C, Q, R, sig):
     """
     theta = -1/sig
     Ba = np.hstack([B, C])
+    R, C, B = map(np.atleast_2d, [R, C, B])
     rR, cR = R.shape
     rC, cC = C.shape
 
