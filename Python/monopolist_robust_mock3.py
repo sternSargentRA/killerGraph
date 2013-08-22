@@ -183,4 +183,7 @@ for i in xrange(N):
 
 plt.plot(Yopt[:, 1], Yopt[:, 0], 'r')
 plt.plot(Yrobust[:, 1], Yrobust[:, 0], 'b--')
+plt.ylabel("Value Function")
+plt.xlabel("entropy")
+plt.title("value sets")
 plt.show()
