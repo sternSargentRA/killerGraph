@@ -130,8 +130,8 @@ for i in xrange(N):
 
     x0 = np.array([[1.], [0.], [0.]])
 
-    Vo = - x0.T.dot(Pwo.dot(x0))- pwo
-    Vr = - x0.T.dot(Pwo.dot(x0))- pwr
+    Vo = - x0.T.dot(Pwo.dot(x0)) - pwo
+    Vr = - x0.T.dot(Pwo.dot(x0)) - pwr
 
     ento = - x0.T.dot(BigOo.dot(x0)) + littleoo
     entr = - x0.T.dot(BigOr.dot(x0)) + littleor
