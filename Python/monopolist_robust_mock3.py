@@ -2,6 +2,8 @@
 
 import numpy as np
 import math
+from killergraphfuncs import *
+import matplotlib.pyplot as plt
 
 
 #-----------------------------------------------------------------------------#
@@ -59,10 +61,108 @@ R = - R
 A = np.array([[1., 0., 0.], [0., 1., 0.], [0., 0., rho]])
 B = np.array([[0.], [1.], [0.]])
 C = np.array([[0.], [0.], [sigma_d]])
-Ad = np.sqrt(beta) * A
-Bd = np.sqrt(beta) * B
+Ad = math.sqrt(beta) * A
+Bd = math.sqrt(beta) * B
 
 
 #-----------------------------------------------------------------------------#
-#
+# Evaluating
 #-----------------------------------------------------------------------------#
+
+# Compute the optimal rule
+fo, po = olrp(beta, A, B, Q, R)
+
+# Compute a robust rule affiliated with sig < 0
+sig = -50.  # why are we redefining sig here?
+F9, K9, P9, Pt9 = doublex9(Ad, Bd, C, Q, R, sig)
+
+K9 = K9 / math.sqrt(beta)
+
+# F9 is the robust decision rule affiliated with sig = - 1/theta;
+# K9 is the worst case shock coefficient matrix affiliated with that rule and that sig.
+
+# compute nonstochastic steady state
+
+# xs is the steady state for [1, Q, d] under the robust decision rule F
+# under the APPROXIMATING model
+
+
+# Check the positive definiteness of the worst-case covariance matrix to
+# assure that theta exceeds the breakdown point
+
+check = eye(P9.shape[0]) + sig * np.dot(C.T, P9.dot(C))
+
+checkfinal = eig(check)[0]
+
+# Check the above ^^
+if checkfinal.any() < 0:
+    raise ValueError('Theta does not exceed breakdown point. Rechoose parameters.')
+
+#-----------------------------------------------------------------------------#
+# Now compute the two worst case shocks and associated value functions
+# and entropies affiliated with some other sig called sigc
+#-----------------------------------------------------------------------------#
+
+N = 100
+
+Xopt = np.zeros((N, 2))
+Xrobust = np.zeros((N, 2))
+
+sigspace = np.linspace(1e-7, 100, N)
+
+for i in xrange(N):
+    sigc = sigspace[i]
+
+    Kwo, Pwo, pwo, BigOo, littleoo = Kworst(beta, sigc, fo, A, B, C, Q, R)
+    Kwr, Pwr, pwr, BigOr, littleor = Kworst(beta, sigc, F9, A, B, C, Q, R)
+
+    # Now compute vf and entropies evaluated at init state x0 = [1, 0, 0]'
+
+    x0 = np.array([[1.], [0.], [0.]])
+
+    Vo = - x0.T.dot(Pwo.dot(x0))- pwo
+    Vr = - x0.T.dot(Pwo.dot(x0))- pwr
+
+    ento = - x0.T.dot(BigOo.dot(x0)) + littleoo
+    entr = - x0.T.dot(BigOr.dot(x0)) + littleor
+
+    Xopt[i, 0] = Vo
+    Xopt[i, 1] = ento
+
+    Xrobust[i, 0] = Vr
+    Xrobust[i, 1] = entr
+
+plt.figure(1)
+plt.plot(Xopt[:, 1], Xopt[:, 0], 'r')
+plt.plot(Xrobust[:, 1], Xrobust[:, 0], 'b--')
+
+
+# Now do the "optimistic" shock calculations
+Yopt = np.zeros((N, 2))
+Yrobust = np.zeros((N, 2))
+
+for i in xrange(N):
+    sigc = .1 * sigspace[i]
+
+    Kwo, Pwo, pwo, BigOo, littleoo = Kworst(beta, sigc, fo, A, B, C, Q, R)
+    Kwr, Pwr, pwr, BigOr, littleor = Kworst(beta, sigc, F9, A, B, C, Q, R)
+
+    # Now compute vf and entropies evaluated at init state x0 = [1, 0, 0]'
+
+    x0 = np.array([[1.], [0.], [0.]])
+
+    Vo = - x0.T.dot(Pwo.dot(x0))- pwo
+    Vr = - x0.T.dot(Pwo.dot(x0))- pwr
+
+    ento = - x0.T.dot(BigOo.dot(x0)) + littleoo
+    entr = - x0.T.dot(BigOr.dot(x0)) + littleor
+
+    Yopt[i, 0] = Vo
+    Yopt[i, 1] = ento
+
+    Yrobust[i, 0] = Vr
+    Yrobust[i, 1] = entr
+
+plt.plot(Yopt[:, 1], Yopt[:, 0], 'r')
+plt.plot(Yrobust[:, 1], Yrobust[:, 0], 'b--')
+plt.show()

@@ -8,7 +8,8 @@ Date: 2013-08-22 10:09:04
 from __future__ import division, print_function
 from math import sqrt
 import numpy as np
-from scipy.linalg import solve, eig, norm, inv, lstsq
+from numpy import dot, eye
+from scipy.linalg import solve, eig, norm, inv
 
 
 def doublej(a1, b1, max_it=50):
@@ -124,12 +125,14 @@ def doubleo(A, C, Q, R, tol=1e-15):
         a1 = a0.dot(solve(v + np.dot(b0, g0), a0))
         b1 = b0 + a0.dot(solve(v + np.dot(b0, g0), b0.dot(a0.T)))
         g1 = g0 + np.dot(a0.T.dot(g0), solve(v + b0.dot(g0), a0))
-        k1 = np.dot(A.dot(g1), solve(np.dot(C, g1.T).dot(C.T) + R.T, C).T)
-        k0 = np.dot(A.dot(g0), solve(np.dot(C, g0.T).dot(C.T) + R.T, C).T)
+        # k1 and k0 are defined differently than they originally were in
+        # this version of the code.  Need to get them matched up.
+        k1 = np.dot(A.dot(g1), solve(C.T, np.dot(C, g1).dot(C.T) + R))
+        k0 = np.dot(A.dot(g0), solve(C.T, np.dot(C, g0).dot(C.T) + R))
         a0 = a1
         b0 = b1
         g0 = g1
-        dd = np.max(k1 - k0)
+        dd = np.max(np.abs(k1 - k0))
 
     return k1, g1
 
@@ -289,11 +292,14 @@ def olrp(beta, A, B, Q, R, W=None, tol=1e-6, max_iter=1000):
     if W is None:
         W = np.zeros((m, cb))
 
-    if np.max(np.abs(eig(R)[0])) > 1e-5:
+    if type(R) != np.ndarray:
+        R = np.array([[R]])
+
+    if np.min(np.abs(eig(R)[0])) > 1e-5:
         A = sqrt(beta) * (A - B.dot(solve(R, W.T)))
         B = sqrt(beta) * B
         Q = Q - W.dot(solve(R, W.T))
-
+        # k, s are different than in the matlab
         k, s = doubleo(A.T, B.T, Q, R)
 
         f = k.T + solve(R, W.T)
@@ -326,3 +332,140 @@ def olrp(beta, A, B, Q, R, W=None, tol=1e-6, max_iter=1000):
 
     return f, p
 
+def olrprobust(beta, A, B, C, Q, R, sig):
+    """
+    Solves the robust control problem
+
+    :math:`min sum beta^t(x'Qx + u'R u)` for the state space system
+
+    .. math::
+
+        x' = A x + B u + C w
+
+    olrprobust solves the problem by tricking it into a stacked olrp
+    problem. as in Hansen-Sargent, Robustness in Macroeconomics,
+    chapter 2. The optimal control with observed state is
+
+    ..math::
+
+        u_t = - F x_t
+
+    And the value function is :math:`-x'Px`
+
+    Parameters
+    ==========
+    beta : float
+        The discount factor in the robust control problem.
+
+    A, B, C : array_like, dtype = float
+        The matrices A, B, and C from the state space system
+
+    Q, R : array_like, dtype = float
+        The matrices Q and R from the robust control problem
+
+    sig :
+        The robustness parameter. sig < 0 indicates a preference for
+        robustness. sig = -1 / theta, where theta is the robustness
+        multiplier.
+
+
+    Returns
+    =======
+    F : array_like, dtype = float
+        The optimal control matrix from above above
+
+    P : array_like, dtype = float
+        The psoitive semi-definite matrix defining the value function
+
+    Pt : array_like, dtype = float
+        The matrix D(P), wehre D(.) is the described in Hansen-Sargent.
+        The conservative measure of continuation value is
+        :math:`-y' D(P) y = -y' Pt y`, where :math:`y = x'` is next
+        period's state.
+
+    K : array_like, dtype = float
+        the worst-case shock matrix K, where :math:`w_{t+1} = K x_t` is
+        the worst case shock
+
+
+    Notes
+    =====
+    Please note that because this is a MINIMUM problem, the convention
+    is that Q and R are `positive definite' matrices (subject to the
+    usual detectability qualifications).
+
+    See Also
+    ========
+    doublex9
+
+    """
+    theta = -1/sig
+    Ba = np.hstack([B, C])
+    R, C, B = map(np.atleast_2d, [R, C, B])
+    rR, cR = R.shape
+    rC, cC = C.shape
+
+    #  there is only one shock
+    Ra = np.vstack([np.hstack([R, np.zeros((rR, cC))]),
+                    np.hstack([np.zeros((cC, cR)), -beta*np.eye(cC)*theta])])
+
+    f, P = olrp(beta, A, Ba, Q, Ra)
+    rB, cB = B.shape
+    F = f[:cB, :]
+    rf, cf = f.shape
+    K = -f[cB:rf, :]
+    cTp = dot(C.T, P)  # Equivalent to Matlab C'*P
+    Pt = P + theta**(-1)*dot(dot(P, C),
+                             dot(inv(eye(cC) - theta**(-1)*dot(cTp, C)), cTp))
+
+    return F, K, P, Pt
+
+def Kworst(beta, sig, F, A, B, C, Q, R):
+    '''
+    For a risk-sensitivity parameter sig=-1/theta,
+    this function computes the worst-case shock process Kw*x and value
+    function matrix Pw for an arbitrary decision rule F for the state space
+    system beta, A, B, C, Q, R.   It also returns the matrices BigO and littleo
+    for forming  the associated discounted  entropy.
+    '''
+
+    if type(R) != np.ndarray:
+        R = np.array([[R]])
+
+    theta = -1./sig
+    # costs of perturbation tricked into linear requlator
+    Ra = -beta * theta
+    # indirect quadratic form in state given F
+    Qa = Q + np.dot(F.T, R.dot(F))
+    # closed loop system matrix
+    ABF = A - np.dot(B, F)
+    # Kw, Pw were different in matlab
+    Kw, Pw = olrp(beta, ABF, C, Qa, Ra)
+
+    Kw = -Kw
+
+    CChat = np.dot(C, inv(1. + sig*np.dot(C.T, Pw.dot(C))).dot(C.T))
+    pw = (beta/(1.-beta)) * np.trace(Pw.dot(CChat))
+
+    # Remark:
+
+    # The worst case law of motion has transition matix ABF + C*K
+    # Now compute matrices in quadratic form plus constant for discounted
+    # entropy according to the formulas
+
+    # O = beta*K'*K + beta*(ABF + CK)'*O*(ABF+CK)
+
+    # o = h_o + .5*beta*trace(O*hat C * hat C') + beta* o
+
+    # Tom: double check the formulas for .5's.
+
+    ho = .5 * np.trace(inv(1. + sig * np.dot(C.T, Pw.dot(C))) - 1.) -\
+         .5 * np.log(inv(1 + sig * np.dot(C.T, Pw.dot(C))))
+
+    Sigworst = np.dot(C, inv(1. + sig * np.dot(C.T, Pw.dot(C)))).dot(C.T)
+    AO = sqrt(beta) * (ABF + C.dot(Kw))
+    BigO = doublej(AO.T, beta*Kw.T.dot(Kw))
+
+    littleo = solve(np.array([[1. - beta]]), (ho + beta * np.trace(BigO.dot(Sigworst))))
+
+    return Kw, Pw, pw, BigO, littleo
