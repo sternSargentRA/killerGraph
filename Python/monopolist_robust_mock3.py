@@ -1,36 +1,48 @@
-# This file mimics monopolist_robust_mock3.m
+"""
+This file mimics monopolist_robust_mock3.m
 
-import numpy as np
+monopolist with adjustment costs
+created as an example in terms of which to cast the `killer graph'
+showing robustness. We'll use olrprobust.m to compute key objects
+Inverse demand curve:
+  p_t = A_0 - A_1 Q_t + d_t
+  d_{t+1} = \rho d_t + \sigma_d epsilon_{t+1}
+  epsilon_{t+1} is iid N(0,1)
+Period return function for monopolist:
+
+  R_t =  p_t Q_t - .5 e (Q_{t+1}-Q_t) - c Q_t   =
+  (A_0 - c) Q_t - A_1 Q_t^2 _ d_t Q_t - .5 e Q_t
+Objective of the firm:
+
+  E_t \sum_{t=0}^\infty \beta^t R_t
+Create linear regulator. State is x_t' = [1, Q_t, d_t]
+control is u_t = (Q_{t+1} - Q_t )
+The implied state-space matrices are
+the A, B, C, Q, R below.
+The free parameters are beta, A_0, A_1, rho, sigma_d, beta, e, c
+AND the robustness parameter sig \equiv - theta^{-1}
+
+Original Matlab Author: Tom Sargent
+
+Python Authors: Chase Coleman and Spencer Lyon
+
+Date: 2013-08-22 16:10:07
+"""
 import math
+from time import time
+import numpy as np
 from killergraphfuncs import *
 import matplotlib.pyplot as plt
 
+#-----------------------------------------------------------------------------#
+# Define run control parameters
+#-----------------------------------------------------------------------------#
+N = 100  # number of values in grid for sigma
+skip = 1  # how many iterations to skip before printing update
 
-#-----------------------------------------------------------------------------#
-# Description
-#-----------------------------------------------------------------------------#
-# monopolist with adjustment costs
-# created as an example in terms of which to cast the `killer graph'
-# showing robustness. We'll use olrprobust.m to compute key objects
-# Inverse demand curve:
-#   p_t = A_0 - A_1 Q_t + d_t
-#   d_{t+1} = \rho d_t + \sigma_d epsilon_{t+1}
-#   epsilon_{t+1} is iid N(0,1)
-# Period return function for monopolist:
-#
-#   R_t =  p_t Q_t - .5 e (Q_{t+1}-Q_t) - c Q_t   =
-#   (A_0 - c) Q_t - A_1 Q_t^2 _ d_t Q_t - .5 e Q_t
-# Objective of the firm:
-#
-#   E_t \sum_{t=0}^\infty \beta^t R_t
-# Create linear regulator. State is x_t' = [1, Q_t, d_t]
-# control is u_t = (Q_{t+1} - Q_t )
-# The implied state-space matrices are
-# the A, B, C, Q, R below.
-# The free parameters are beta, A_0, A_1, rho, sigma_d, beta, e, c
-# AND the robustness parameter sig \equiv - theta^{-1}
-#-----------------------------------------------------------------------------#
+msg = "Iteration {num} of {N}. Total time elapsed {time}"
 
+start_time = time()
 
 #-----------------------------------------------------------------------------#
 # Define parameters to be used
@@ -42,10 +54,8 @@ sigma_d = .05
 beta = .95
 c = 2.
 e = 50.
-sig = -10. # This is the risk sensitives parameter and should be neg when there
-           # is fear of model misspecification
-#-----------------------------------------------------------------------------#
-
+sig = -10.  # This is the risk sensitives parameter and should be neg when
+            # there is fear of model misspecification
 
 #-----------------------------------------------------------------------------#
 # Define necessary Matrices
@@ -131,6 +141,12 @@ for i in xrange(N):
 
     Xrobust[i, 0] = Vr
     Xrobust[i, 1] = entr
+
+    if i % skip == 0:
+        e_time = time() - start_time
+        print(msg.format(num=i, N=N, time=e_time))
+
+
 
 plt.figure(1)
 plt.plot(Xopt[:, 1], Xopt[:, 0], 'r')
