@@ -121,12 +121,22 @@ def doubleo(A, C, Q, R, tol=1e-15):
     ss = max(A.shape)
     v = np.eye(ss)
 
+    # NOTE: This is a little hack to make sure we update k1 and k0 properly
+    #       depending on the dimensions of C
+    c_vec = C.shape[0] > 1
+
     while dd > tol:
         a1 = np.dot(a0, solve(v + np.dot(b0, g0), a0))
         b1 = b0 + np.dot(a0, solve(v + np.dot(b0, g0), np.dot(b0, a0.T)))
         g1 = g0 + np.dot(np.dot(a0.T, g0), solve(v + np.dot(b0, g0), a0))
-        k1 = np.dot(np.dot(A, g1), C.T / (np.dot(C, g1).dot(C.T) + R))
-        k0 = np.dot(A.dot(g0), C.T / (np.dot(C, g0).dot(C.T) + R))
+
+        if c_vec:
+            k1 = np.dot(A.dot(g1), solve(np.dot(C, g1.T).dot(C.T) + R.T, C).T)
+            k0 = np.dot(A.dot(g0), solve(np.dot(C, g0.T).dot(C.T) + R.T, C).T)
+        else:
+            k1 = np.dot(np.dot(A, g1), C.T / (np.dot(C, g1).dot(C.T) + R))
+            k0 = np.dot(A.dot(g0), C.T / (np.dot(C, g0).dot(C.T) + R))
+
         dd = np.max(np.abs(k1 - k0))
         a0 = a1
         b0 = b1
