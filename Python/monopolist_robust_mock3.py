@@ -105,85 +105,83 @@ check = eye(P9.shape[0]) + sig * np.dot(C.T, P9.dot(C))
 checkfinal = eig(check)[0]
 
 # Check the above ^^
-if checkfinal.any() < 0:
-    raise ValueError('Theta does not exceed breakdown point. Rechoose parameters.')
+if (checkfinal < 0).any():
+    raise ValueError("Theta doesn't exceed breakdown point. Rechoose params.")
 
-#-----------------------------------------------------------------------------#
-# Now compute the two worst case shocks and associated value functions
-# and entropies affiliated with some other sig called sigc
-#-----------------------------------------------------------------------------#
+
+def value_entropy(sigma_vec):
+    """
+    Compute value functions and entropies associated with a stream of
+    shocks sigma_vec
+
+    Parameters
+    ==========
+    sigma_vec : array_like, dtype=float
+        The stream of shocks to be used in computing the responses.
+
+    Returns
+    =======
+    opt, robust: array_like, dtype=float, shape=(sigma_vec.size, 2)
+        The optimal and robust value function and entropy associated
+        with the shocks in sigma_vec. The first column of each of these
+        arrays is the value function and the second column is the
+        entropy.
+
+    """
+    N = sigma_vec.size
+    opt = np.zeros((N, 2))
+    robust = np.zeros((N, 2))
+    for i in xrange(N):
+        sigc = sigma_vec[i]
+
+        Kwo, Pwo, pwo, BigOo, littleoo = Kworst(beta, sigc, fo, A, B, C, Q, R)
+        Kwr, Pwr, pwr, BigOr, littleor = Kworst(beta, sigc, F9, A, B, C, Q, R)
+
+        # Now compute vf and entropies evaluated at init state x0 = [1, 0, 0]'
+
+        x0 = np.array([[1.], [0.], [0.]])
+
+        Vo = - x0.T.dot(Pwo.dot(x0)) - pwo
+        Vr = - x0.T.dot(Pwr.dot(x0)) - pwr
+
+        ento = x0.T.dot(BigOo.dot(x0)) + littleoo
+        entr = x0.T.dot(BigOr.dot(x0)) + littleor
+
+        opt[i, 0] = Vo
+        opt[i, 1] = ento
+
+        robust[i, 0] = Vr
+        robust[i, 1] = entr
+
+        if i % skip == 0:
+            e_time = time() - start_time
+            print(msg.format(num=i, N=N, time=e_time))
+
+    return opt, robust
+
 
 N = 100
-
-Xopt = np.zeros((N, 2))
-Xrobust = np.zeros((N, 2))
-
 sigspace = np.linspace(1e-7, 100, N)
 
-for i in xrange(N):
-    sigc = - sigspace[i]
+# compute the two worst case shocks and associated value functions and
+# entropies affiliated with some other sig called sigc
+worst_opt, worst_robust = value_entropy(-sigspace)
 
-    Kwo, Pwo, pwo, BigOo, littleoo = Kworst(beta, sigc, fo, A, B, C, Q, R)
-    Kwr, Pwr, pwr, BigOr, littleor = Kworst(beta, sigc, F9, A, B, C, Q, R)
-
-    # Now compute vf and entropies evaluated at init state x0 = [1, 0, 0]'
-
-    x0 = np.array([[1.], [0.], [0.]])
-
-    Vo = - x0.T.dot(Pwo.dot(x0)) - pwo
-    Vr = - x0.T.dot(Pwr.dot(x0)) - pwr
-
-    ento = x0.T.dot(BigOo.dot(x0)) + littleoo
-    entr = x0.T.dot(BigOr.dot(x0)) + littleor
-
-    Xopt[i, 0] = Vo
-    Xopt[i, 1] = ento
-
-    Xrobust[i, 0] = Vr
-    Xrobust[i, 1] = entr
-
-    if i % skip == 0:
-        e_time = time() - start_time
-        print(msg.format(num=i, N=N, time=e_time))
-
-plt.figure(1)
-plt.plot(Xopt[:, 1], Xopt[:, 0], 'r')
-plt.plot(Xrobust[:, 1], Xrobust[:, 0], 'b--')
-
+# Now do the "optimistic" case
 print("\n" + "#" * 70 + "\nMoving on to optimistic case\n" + "#" * 70 + "\n")
-# Now do the "optimistic" shock calculations
-Yopt = np.zeros((N, 2))
-Yrobust = np.zeros((N, 2))
+optimistic_opt, optimistic_robust = value_entropy(0.1 * sigspace)
 
-for i in xrange(N):
-    sigc = .1 * sigspace[i]
-
-    Kwo, Pwo, pwo, BigOo, littleoo = Kworst(beta, sigc, fo, A, B, C, Q, R)
-    Kwr, Pwr, pwr, BigOr, littleor = Kworst(beta, sigc, F9, A, B, C, Q, R)
-
-    # Now compute vf and entropies evaluated at init state x0 = [1, 0, 0]'
-
-    x0 = np.array([[1.], [0.], [0.]])
-
-    Vo = - x0.T.dot(Pwo.dot(x0)) - pwo
-    Vr = - x0.T.dot(Pwr.dot(x0)) - pwr
-
-    ento = x0.T.dot(BigOo.dot(x0)) + littleoo
-    entr = x0.T.dot(BigOr.dot(x0)) + littleor
-
-    Yopt[i, 0] = Vo
-    Yopt[i, 1] = ento
-
-    Yrobust[i, 0] = Vr
-    Yrobust[i, 1] = entr
-
-    if i % skip == 0:
-        e_time = time() - start_time
-        print(msg.format(num=i, N=N, time=e_time))
-
-plt.plot(Yopt[:, 1], Yopt[:, 0], 'r')
-plt.plot(Yrobust[:, 1], Yrobust[:, 0], 'b--')
+# Set up figure
+plt.figure(1)
 plt.ylabel("Value Function")
-plt.xlabel("entropy")
-plt.title("value sets")
+plt.xlabel("Entropy")
+plt.title("Value sets")
+
+# Plot worst case shocks
+plt.plot(worst_opt[:, 1], worst_opt[:, 0], 'r')
+plt.plot(worst_robust[:, 1], worst_robust[:, 0], 'b--')
+
+# Plot optimistic case
+plt.plot(optimistic_opt[:, 1], optimistic_opt[:, 0], 'r')
+plt.plot(optimistic_robust[:, 1], optimistic_robust[:, 0], 'b--')
 plt.show()
