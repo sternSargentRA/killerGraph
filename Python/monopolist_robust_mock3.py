@@ -33,6 +33,8 @@ from time import time
 import numpy as np
 from killergraphfuncs import *
 import matplotlib.pyplot as plt
+import pandas as pd
+import scipy.optimize as opt
 
 #-----------------------------------------------------------------------------#
 # Define run control parameters
@@ -109,7 +111,7 @@ if (checkfinal < 0).any():
     raise ValueError("Theta doesn't exceed breakdown point. Rechoose params.")
 
 
-def value_entropy(sigma_vec):
+def value_entropy(sigma_vec=None,  entrop_bound=None,  skip=10):
     """
     Compute value functions and entropies associated with a stream of
     shocks sigma_vec
@@ -118,6 +120,10 @@ def value_entropy(sigma_vec):
     ==========
     sigma_vec : array_like, dtype=float
         The stream of shocks to be used in computing the responses.
+    entrop_bound : scalar, dtype=float
+        The maximum level of entropy that we want
+    skip : integer, dtype=int
+        How many iterations between prints
 
     Returns
     =======
@@ -128,12 +134,11 @@ def value_entropy(sigma_vec):
         entropy.
 
     """
-    N = sigma_vec.size
-    opt = np.zeros((N, 2))
-    robust = np.zeros((N, 2))
-    for i in xrange(N):
-        sigc = sigma_vec[i]
-
+    def calc_func(sigc):
+        """
+        Given a sigc (scalar, dtype=float) it returns Vo, Vr, ento, entr
+        that are used to calculate value func and entropy for sigc
+        """
         Kwo, Pwo, pwo, BigOo, littleoo = Kworst(beta, sigc, fo, A, B, C, Q, R)
         Kwr, Pwr, pwr, BigOr, littleor = Kworst(beta, sigc, F9, A, B, C, Q, R)
 
@@ -147,17 +152,38 @@ def value_entropy(sigma_vec):
         ento = x0.T.dot(BigOo.dot(x0)) + littleoo
         entr = x0.T.dot(BigOr.dot(x0)) + littleor
 
-        opt[i, 0] = Vo
-        opt[i, 1] = ento
+        return Vo, Vr, ento, entr
 
-        robust[i, 0] = Vr
-        robust[i, 1] = entr
+    if sigma_vec is not None and entrop_bound is not None:
+        raise ValueError('Cannot define both sigma_vec and \
+                          entropy_bound.  Try again.')
+
+    # If we have entrop_bound then use it to calculate the desired results
+    if entrop_bound:
+        print('entrop_bound')
+
+    else:
+        N = sigma_vec.size
+        data = pd.DataFrame(np.zeros((N, 4)),
+                            index=sigma_vec,
+                            columns=['opt_vf', 'opt_ent', 'rob_vf', 'rob_ent'])
+
+        for i in xrange(N):
+            sigc = sigma_vec[i]
+
+            Vo, Vr, ento, entr = calc_func(sigc)
+
+            data['opt_vf'][i] = Vo
+            data['opt_ent'][i] = ento
+
+            data['rob_vf'][i] = Vr
+            data['rob_ent'][i] = entr
 
         if i % skip == 0:
             e_time = time() - start_time
             print(msg.format(num=i, N=N, time=e_time))
 
-    return opt, robust
+    return data
 
 
 N = 100
@@ -165,11 +191,11 @@ sigspace = np.linspace(1e-7, 100, N)
 
 # compute the two worst case shocks and associated value functions and
 # entropies affiliated with some other sig called sigc
-worst_opt, worst_robust = value_entropy(-sigspace)
+worst_dat = value_entropy(sigma_vec=-sigspace)
 
 # Now do the "optimistic" case
 print("\n" + "#" * 70 + "\nMoving on to optimistic case\n" + "#" * 70 + "\n")
-optimistic_opt, optimistic_robust = value_entropy(0.1 * sigspace)
+optimistic_dat = value_entropy(sigma_vec=(0.1 * sigspace))
 
 # Set up figure
 plt.figure(1)
@@ -178,10 +204,10 @@ plt.xlabel("Entropy")
 plt.title("Value sets")
 
 # Plot worst case shocks
-plt.plot(worst_opt[:, 1], worst_opt[:, 0], 'r')
-plt.plot(worst_robust[:, 1], worst_robust[:, 0], 'b--')
+plt.plot(worst_dat['opt_ent'], worst_dat['opt_vf'], 'r')
+plt.plot(worst_dat['rob_ent'], worst_dat['rob_vf'], 'b--')
 
 # Plot optimistic case
-plt.plot(optimistic_opt[:, 1], optimistic_opt[:, 0], 'r')
-plt.plot(optimistic_robust[:, 1], optimistic_robust[:, 0], 'b--')
+plt.plot(optimistic_dat['opt_ent'], optimistic_dat['opt_vf'], 'r')
+plt.plot(optimistic_dat['rob_ent'], optimistic_dat['rob_vf'], 'b--')
 plt.show()
