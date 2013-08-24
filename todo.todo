@@ -1,0 +1,2 @@
+KillerGraph.py:
+ ☐ Turn the graph generator into a function where the user can just pass different target entropy levels and watch the magic happen
