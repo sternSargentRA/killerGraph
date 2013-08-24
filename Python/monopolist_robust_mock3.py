@@ -111,7 +111,96 @@ if (checkfinal < 0).any():
     raise ValueError("Theta doesn't exceed breakdown point. Rechoose params.")
 
 
-def value_entropy(sigma_vec=None,  entrop_bound=None,  skip=10):
+def optimal(sigc):
+    """
+    Given a sigc (scalar, dtype=float) it returns the optimal value
+    function and entropy level.
+    """
+    Kwo, Pwo, pwo, BigOo, littleoo = Kworst(beta, sigc, fo, A, B, C, Q, R)
+    x0 = np.array([[1.], [0.], [0.]])
+    Vo = - x0.T.dot(Pwo.dot(x0)) - pwo
+    ento = x0.T.dot(BigOo.dot(x0)) + littleoo
+
+    return map(float, [Vo, ento])
+
+
+def robust(sigc):
+    """
+    Given a sigc (scalar, dtype=float) it returns the robust value
+    function and entropy level.
+    """
+    Kwr, Pwr, pwr, BigOr, littleor = Kworst(beta, sigc, F9, A, B, C, Q, R)
+    x0 = np.array([[1.], [0.], [0.]])
+    Vr = - x0.T.dot(Pwr.dot(x0)) - pwr
+    entr = x0.T.dot(BigOr.dot(x0)) + littleor
+
+    return map(float, [Vr, entr])
+
+
+def vf_ent_target(ent_target, ro, bw):
+    """
+    Compute the value function and entropy levels for a sigma path
+    increasing in modulus until it reaches the specified target entropy
+    value.
+
+    Parameters
+    ==========
+    ent_target : scalar
+        The target entropy value
+
+    ro : str
+        A string specifying whether the robust or optimal solution
+        should be used to populate the DataFrame. The only acceptable
+        values are 'optimal' and 'robust'.
+
+    bw : str
+        A string specifying whether the implied shock path follows best
+        or worst assumptions. The only acceptable values are 'best' and
+        'worst'.
+
+    Returns
+    =======
+    df : pd.DataFrame
+        A pandas DataFrame containing the value function and entropy
+        values up to the ent_target parameter. The index is the
+        relevant portion of sig_vec and the columns are 'vf' and
+        'ent' for value function and entropy, respectively
+
+    """
+    def _populate_df(svec, kind):
+        """
+        Internal function used to populate DataFrame using artificial
+        svec up to the ent_target value
+        """
+        df = pd.DataFrame(index=svec, columns=['vf', 'ent'])
+        if kind == 'robust':
+            func = robust
+        elif kind == 'optimal':
+            func = optimal
+        else:
+            raise ValueError("Argument 'kind' for function _populate_df"
+                             + " must be 'optimal' or 'robust'")
+
+        for i, sigc in enumerate(svec):
+            df.ix[sigc] = func(sigc)
+            if ent_target - df.ix[sigc, 'ent'] < 0:
+                break
+        else:
+            df = df.dropna()
+
+        return df
+
+    if bw == 'best':
+        svec = 0.1 * np.linspace(1e-7, 1000, 1e4)
+    elif bw == 'worst':
+        svec = -1 * np.linspace(1e-7, 1000, 1e4)
+    else:
+        raise ValueError("Argument 'bw' must be 'best' or 'worst'")
+
+    return _populate_df(svec, ro)
+
+
+def vf_ent_sigpath(sigma_vec, skip=10):
     """
     Compute value functions and entropies associated with a stream of
     shocks sigma_vec
@@ -120,64 +209,29 @@ def value_entropy(sigma_vec=None,  entrop_bound=None,  skip=10):
     ==========
     sigma_vec : array_like, dtype=float
         The stream of shocks to be used in computing the responses.
-    entrop_bound : scalar, dtype=float
-        The maximum level of entropy that we want
+
     skip : integer, dtype=int
         How many iterations between prints
 
     Returns
     =======
-    opt, robust: array_like, dtype=float, shape=(sigma_vec.size, 2)
+    data: pd.DataFrame
         The optimal and robust value function and entropy associated
         with the shocks in sigma_vec. The first column of each of these
         arrays is the value function and the second column is the
         entropy.
 
     """
-    def calc_func(sigc):
-        """
-        Given a sigc (scalar, dtype=float) it returns Vo, Vr, ento, entr
-        that are used to calculate value func and entropy for sigc
-        """
-        Kwo, Pwo, pwo, BigOo, littleoo = Kworst(beta, sigc, fo, A, B, C, Q, R)
-        Kwr, Pwr, pwr, BigOr, littleor = Kworst(beta, sigc, F9, A, B, C, Q, R)
+    N = sigma_vec.size
+    data = pd.DataFrame(np.zeros((N, 4)),
+                        index=sigma_vec,
+                        columns=['opt_vf', 'opt_ent', 'rob_vf', 'rob_ent'])
 
-        # Now compute vf and entropies evaluated at init state x0 = [1, 0, 0]'
+    for i in xrange(N):
+        sigc = sigma_vec[i]
+        data.ix[sigc, ['opt_vf', 'opt_ent']] = optimal(sigc)
 
-        x0 = np.array([[1.], [0.], [0.]])
-
-        Vo = - x0.T.dot(Pwo.dot(x0)) - pwo
-        Vr = - x0.T.dot(Pwr.dot(x0)) - pwr
-
-        ento = x0.T.dot(BigOo.dot(x0)) + littleoo
-        entr = x0.T.dot(BigOr.dot(x0)) + littleor
-
-        return Vo, Vr, ento, entr
-
-    if sigma_vec is not None and entrop_bound is not None:
-        raise ValueError('Cannot define both sigma_vec and \
-                          entropy_bound.  Try again.')
-
-    # If we have entrop_bound then use it to calculate the desired results
-    if entrop_bound:
-        print('entrop_bound')
-
-    else:
-        N = sigma_vec.size
-        data = pd.DataFrame(np.zeros((N, 4)),
-                            index=sigma_vec,
-                            columns=['opt_vf', 'opt_ent', 'rob_vf', 'rob_ent'])
-
-        for i in xrange(N):
-            sigc = sigma_vec[i]
-
-            Vo, Vr, ento, entr = calc_func(sigc)
-
-            data['opt_vf'][i] = Vo
-            data['opt_ent'][i] = ento
-
-            data['rob_vf'][i] = Vr
-            data['rob_ent'][i] = entr
+        data.ix[sigc, ['rob_vf', 'rob_ent']] = robust(sigc)
 
         if i % skip == 0:
             e_time = time() - start_time
@@ -191,11 +245,16 @@ sigspace = np.linspace(1e-7, 100, N)
 
 # compute the two worst case shocks and associated value functions and
 # entropies affiliated with some other sig called sigc
-worst_dat = value_entropy(sigma_vec=-sigspace)
+print("\n" + "#" * 70)
+print("Solving original problem using sigma path")
+print("#" * 70 + "\n")
+print("\nDoing worst case")
 
-# Now do the "optimistic" case
-print("\n" + "#" * 70 + "\nMoving on to optimistic case\n" + "#" * 70 + "\n")
-optimistic_dat = value_entropy(sigma_vec=(0.1 * sigspace))
+worst_df = vf_ent_sigpath(sigma_vec=-sigspace)
+
+# Now do the "best" case
+print("\nNow doing best case")
+best_df = vf_ent_sigpath(sigma_vec=(0.1 * sigspace))
 
 # Set up figure
 plt.figure(1)
@@ -204,10 +263,45 @@ plt.xlabel("Entropy")
 plt.title("Value sets")
 
 # Plot worst case shocks
-plt.plot(worst_dat['opt_ent'], worst_dat['opt_vf'], 'r')
-plt.plot(worst_dat['rob_ent'], worst_dat['rob_vf'], 'b--')
+plt.plot(worst_df['opt_ent'], worst_df['opt_vf'], 'r')
+plt.plot(worst_df['rob_ent'], worst_df['rob_vf'], 'b--')
 
-# Plot optimistic case
-plt.plot(optimistic_dat['opt_ent'], optimistic_dat['opt_vf'], 'r')
-plt.plot(optimistic_dat['rob_ent'], optimistic_dat['rob_vf'], 'b--')
+# Plot best case
+plt.plot(best_df['opt_ent'], best_df['opt_vf'], 'r')
+plt.plot(best_df['rob_ent'], best_df['rob_vf'], 'b--')
 plt.show()
+
+ent_target = max(best_df[['opt_ent', 'rob_ent']].max().max(),
+                 worst_df[['opt_ent', 'rob_ent']].max().max())
+
+print("\n" + "#" * 70)
+print("Now using a grid search method to make all paths go to same entropy")
+print("#" * 70 + "\n")
+
+print("\nDoing optimal vf + best-case shock path")
+opt_best_df = vf_ent_target(ent_target, 'optimal', 'best')
+
+print("\nDoing optimal vf + worst-case shock path")
+opt_worst_df = vf_ent_target(ent_target, 'optimal', 'worst')
+
+print("\nDoing robust vf + best-case shock path")
+rob_best_df = vf_ent_target(ent_target, 'robust', 'best')
+
+print("\nDoing robust vf + worst-case shock path")
+rob_worst_df = vf_ent_target(ent_target, 'robust', 'worst')
+
+# Generate new plot
+fig2 = plt.figure()
+ax = fig2.add_subplot(111)
+
+opt_best_df.plot(x='ent', y='vf', style='r', legend=False, ax=ax)
+opt_worst_df.plot(x='ent', y='vf', style='r', legend=False, ax=ax)
+rob_best_df.plot(x='ent', y='vf', style='b--', legend=False, ax=ax)
+rob_worst_df.plot(x='ent', y='vf', style='b--', legend=False, ax=ax)
+
+ax.set_ylabel("Value Function")
+ax.set_xlabel("Entropy")
+ax.set_title("Value Sets, Constant End-Point")
+
+
+# value_entropy(entrop_target=1572226)

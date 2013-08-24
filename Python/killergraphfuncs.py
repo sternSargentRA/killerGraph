@@ -302,7 +302,7 @@ def olrp(beta, A, B, Q, R, W=None, tol=1e-6, max_iter=1000):
     if type(R) != np.ndarray:
         R = np.array([[R]])
 
-    if np.min(np.abs(eig(R)[0])) > 1e-5:
+    if np.min(np.abs(eig(np.atleast_2d(R))[0])) > 1e-5:
         A = sqrt(beta) * (A - B.dot(solve(R, W.T)))
         B = sqrt(beta) * B
         Q = Q - W.dot(solve(R, W.T))
