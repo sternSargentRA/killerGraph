@@ -301,7 +301,7 @@ rob_worst_df.plot(x='ent', y='vf', style='b--', legend=False, ax=ax)
 
 ax.set_ylabel("Value Function")
 ax.set_xlabel("Entropy")
-ax.set_title("Value Sets, Constant End-Point")
-
+ax.set_title("Value Sets")
+plt.savefig('value_sets.eps')
 
 # value_entropy(entrop_target=1572226)
